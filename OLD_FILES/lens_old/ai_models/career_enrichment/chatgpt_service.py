@@ -1,0 +1,43 @@
+import os
+from SCRIPTS.keychain_utils import get_secret
+
+import asyncio
+from dotenv import load_dotenv
+import openai
+
+# Explicitly load .env file
+load_dotenv(override=True)
+
+
+class ChatGPTService:
+    def __init__(self, openai_key=None):
+        """Initialize OpenAI client with API key from .env or parameter."""
+        self.openai_key = openai_key or get_secret("OPENAI_API_KEY")
+        if not self.openai_key:
+            raise ValueError("🚨 No OpenAI API key found. Check your .env file.")
+        print(
+            f"✅ Using OpenAI API Key: {self.openai_key[:10]}... (truncated for security)"
+        )
+        self.client = openai.OpenAI(api_key=self.openai_key)
+
+    async def generate_response(self, prompt: str, role="career counselor") -> str:
+        """Generate a response from OpenAI GPT-4 Turbo."""
+        messages = [
+            {"role": "system", "content": f"You are a {role}."},
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            print(f"📡 Sending request to OpenAI for prompt: {prompt[:50]}...")
+            response = await asyncio.to_thread(self.sync_generate, messages)
+            print(f"✅ OpenAI Response: {response[:100]}...")
+            return response
+        except Exception as e:
+            print(f"🚨 ChatGPT API call failed: {e}")
+            return None
+
+    def sync_generate(self, messages):
+        """Synchronous method to generate response."""
+        response = self.client.chat.completions.create(
+            model="gpt-4-turbo", messages=messages
+        )
+        return response.choices[0].message.content

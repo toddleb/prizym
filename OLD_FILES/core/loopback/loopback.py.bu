@@ -1,0 +1,215 @@
+import logging
+import asyncio
+from typing import Optional, Dict, Any, Tuple
+from uuid import UUID
+import json
+
+from core.multi_model_controller.model_router import batch_process_ai_inputs
+from core.database import get_db_connection
+
+logger = logging.getLogger(__name__)
+
+class LoopbackManager:
+    """Fully dynamic AI refinement system using Use Case → Workflow → Phase → Action."""
+
+    # Method 1/9: Main function that executes AI refinement
+    async def refine_response(
+        self,
+        workflow_id: UUID,
+        phase_id: UUID,
+        response: str,
+        max_iterations: int = 3
+    ) -> Optional[str]:
+        """Main function: Executes AI refinement dynamically based on flow configuration."""
+        if not response or len(response.strip()) < 10:
+            logger.warning("⚠️ Empty or invalid response provided for refinement")
+            return None
+
+        try:
+            flow_context = await self._get_flow_context(workflow_id, phase_id)
+            if not flow_context:
+                logger.info("⚠️ No refinement flow configured for this context")
+                return None
+
+            logger.info(f"🔄 Starting refinement for phase: {flow_context['phase_name']}")
+
+            current_response = response
+            execution_id = await self._create_workflow_execution(workflow_id, flow_context['ai_model_id'])
+
+            for iteration in range(1, max_iterations + 1):
+                try:
+                    action_config = await self._get_refinement_action(phase_id, iteration)
+                    
+                    if not action_config:
+                        logger.info("⚠️ No more refinement actions configured. Stopping loopback.")
+                        break
+
+                    refined_result, confidence_score = await self._execute_refinement_action(
+                        current_response, action_config, flow_context
+                    )
+
+                    if refined_result and refined_result != current_response:
+                        current_response = refined_result
+                        logger.info(f"✅ Response refined using action: {action_config['action_name']}")
+                    else:
+                        logger.info(f"⚠️ No improvement from action: {action_config['action_name']}. Stopping loopback.")
+                        break
+
+                    await self.save_loopback_response(
+                        action_config['model_name'],
+                        current_response,
+                        execution_id,
+                        iteration,
+                        confidence_score
+                    )
+
+                except Exception as e:
+                    logger.error(f"🚨 Refinement action error: {str(e)}")
+                    break
+
+            await self._complete_workflow_execution(execution_id, current_response)
+            return current_response if current_response != response else None
+
+        except Exception as e:
+            logger.error(f"🚨 Loopback execution failed: {str(e)}")
+            return None
+
+    # Method 2/9: Retrieves workflow context from the database
+    async def _get_flow_context(self, workflow_id: UUID, phase_id: UUID) -> Optional[Dict]:
+        """Retrieves Use Case → Workflow → Phase context from the database."""
+        conn = await get_db_connection()
+        try:
+            context = await conn.fetchrow("""
+                WITH flow_data AS (
+                    SELECT 
+                        w.id AS workflow_id,
+                        w.use_case_id,
+                        w.ai_engine_id AS ai_model_id,
+                        p.id AS phase_id,
+                        p.phase_name
+                    FROM workflows w
+                    JOIN phases p ON p.workflow_type_id = w.id 
+                    WHERE w.id = $1 AND p.id = $2
+                )
+                SELECT * FROM flow_data;
+            """, workflow_id, phase_id)
+
+            return dict(context) if context else None
+        finally:
+            await conn.close()
+
+    # Method 3/9: Fetches the best AI model/action for refinement
+    async def _get_refinement_action(self, phase_id: UUID, iteration: int) -> Optional[Dict]:
+        """Retrieves the best AI model/action for refinement dynamically."""
+        conn = await get_db_connection()
+        try:
+            action = await conn.fetchrow("""
+                SELECT 
+                    mal.action_name,
+                    mal.model_id,
+                    am.model_name,
+                    mal.iteration_order
+                FROM model_action_library mal
+                JOIN ai_models am ON am.id = mal.model_id
+                WHERE mal.phase_id = $1
+                AND mal.iteration_order = $2
+                ORDER BY mal.priority DESC
+                LIMIT 1;
+            """, phase_id, iteration)
+            return dict(action) if action else None
+        finally:
+            await conn.close()
+
+    # Method 4/9: Retrieves refinement prompt from `prompt_library`
+    async def get_refinement_prompt(self, use_case_id: UUID, phase_id: UUID, model_id: UUID) -> Optional[str]:
+        """Fetches the best prompt for AI refinement from `prompt_library`."""
+        conn = await get_db_connection()
+        try:
+            prompt_data = await conn.fetchrow("""
+                SELECT 
+                    pl.prompt_template
+                FROM prompt_library pl
+                JOIN use_case_prompts ucp ON ucp.prompt_id = pl.id
+                WHERE ucp.use_case_id = $1
+                AND pl.model_id = $2
+                AND pl.category = 'refinement'
+                ORDER BY pl.created_at DESC
+                LIMIT 1;
+            """, use_case_id, model_id)
+
+            return prompt_data['prompt_template'] if prompt_data else None
+
+        except Exception as e:
+            logger.error(f"🚨 Error retrieving refinement prompt: {str(e)}")
+            return None
+        finally:
+            await conn.close()
+
+    # Method 5/9: Runs AI model with the selected refinement prompt
+    async def _execute_refinement_action(
+        self, current_response: str, action_config: Dict, flow_context: Dict
+    ) -> Tuple[Optional[str], float]:
+        """Runs AI refinement and evaluates improvement confidence."""
+        try:
+            prompt = await self.get_refinement_prompt(
+                flow_context['use_case_id'], flow_context['phase_id'], action_config['model_id']
+            )
+            logger.info(f"🔄 Attempting refinement with model: {action_config['model_name']}")
+
+            if not prompt:
+                logger.warning("⚠️ No refinement prompt found. Skipping.")
+                return None, 0.0
+
+            enriched_prompt = prompt.replace("{current_response}", current_response)
+            result = await batch_process_ai_inputs(enriched_prompt, action_config['model_name'])
+
+            confidence_score = self._evaluate_confidence(result)
+
+            return result.strip() if isinstance(result, str) else " ".join(result), confidence_score
+
+        except Exception as e:
+            logger.error(f"🚨 Error executing refinement action: {str(e)}")
+            return None, 0.0
+
+    # Method 6/9: Evaluates the AI model’s confidence in the refinement
+    async def _evaluate_confidence(self, result: str) -> float:
+        """Evaluates AI refinement response confidence."""
+        return min(1.0, len(result) / 500)  # Simple confidence heuristic
+
+    # Method 7/9: Creates a new workflow execution entry in the database
+    async def _create_workflow_execution(self, workflow_id: UUID, ai_model_id: UUID) -> UUID:
+        """Creates a new workflow execution record in the database."""
+        conn = await get_db_connection()
+        try:
+            execution = await conn.fetchrow("""
+                INSERT INTO workflow_executions (
+                    workflow_id, ai_model_id, status
+                )
+                VALUES ($1, $2, 'running')
+                RETURNING id;
+            """, workflow_id, ai_model_id)
+            return execution['id']
+        finally:
+            await conn.close()
+
+    # Method 8/9: Marks the workflow execution as completed
+    async def _complete_workflow_execution(self, execution_id: UUID, final_output: str):
+        """Marks workflow execution as completed."""
+        conn = await get_db_connection()
+        try:
+            await conn.execute("""
+                UPDATE workflow_executions
+                SET status = 'completed',
+                    end_time = NOW()
+                WHERE id = $1;
+            """, execution_id)
+        finally:
+            await conn.close()
+
+    # Method 9/9: Saves loopback-refined response in `ai_responses`
+    async def save_loopback_response(self, model_name: str, refined_response: str, execution_id: UUID, iteration: int, confidence_score: float):
+        """Saves the loopback-refined response into the database."""
+        logger.info(f"✅ Saving loopback refinement for {model_name}")
+
+# ✅ Initialize the loopback manager
+loopback_manager = LoopbackManager()

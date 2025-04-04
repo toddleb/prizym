@@ -1,0 +1,28 @@
+/* This should go in your index.css file or be imported */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Add animation class needed for the skill details panel fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Add these styles to ensure consistent width and prevent stretching */
+.max-w-4xl {
+  max-width: 56rem;
+}
+
+/* These styles help the card maintain its dimensions */
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}

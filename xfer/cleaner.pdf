@@ -1,0 +1,276 @@
+"""
+Compensation Plan Cleaner
+Cleans extracted text from JSON files and outputs structured JSON.
+"""
+
+import os
+import json
+import re
+import logging
+from pathlib import Path
+from typing import Dict, List, Union, Any, Optional
+
+# Import configuration from your centralized config
+from config.config import config
+
+logger = logging.getLogger("cleaner")
+
+# Define exclude patterns with comments for better maintainability
+EXCLUDE_PATTERNS = [
+    r'\d+\s*\|\s*MDT\s+Confidential',  # Page numbers with confidentiality
+    r'Medtronic\s+Confidential',  # Standard confidentiality markers
+    r'(?i)(Confidential|For Internal Use Only|All Rights Reserved)',  # Legal notices
+    r'(?i)(Subject to Change|May be Modified|Eligibility)',  # Disclaimers
+    r'(?i)(Page \d+ of \d+)',  # Page numbers
+    r'(?i)(©|Copyright) \d{4}',  # Copyright notices
+    r'FY\d+\s*Superficial[^\n]*\n',  # Header/footer lines
+    r'Table of Contents.*?(?=I\.\s+Plan Purpose)',  # Table of contents sections
+    r'^\s+',  # Leading whitespace on lines
+]
+
+# Define normalization patterns for better text structure
+NORMALIZE_PATTERNS = [
+    (r'\n{3,}', '\n\n'),  # Replace 3+ newlines with 2
+    (r'\s{2,}', ' '),  # Replace multiple spaces with single space
+    (r'([IVX]+)\.\s+([A-Za-z])', r'\1. \2'),  # Standardize section headers
+]
+
+def remove_patterns(text: str) -> str:
+    """
+    Removes unwanted patterns from the text.
+    
+    Args:
+        text: The input text to clean
+        
+    Returns:
+        Cleaned text with patterns removed
+    """
+    for pattern in EXCLUDE_PATTERNS:
+        text = re.sub(pattern, "", text, flags=re.DOTALL)
+    return text
+
+def normalize_text(text: str) -> str:
+    """
+    Normalizes spacing and formatting in the text.
+    
+    Args:
+        text: The input text to normalize
+        
+    Returns:
+        Normalized text
+    """
+    # Apply normalization patterns
+    for pattern, replacement in NORMALIZE_PATTERNS:
+        text = re.sub(pattern, replacement, text, flags=re.DOTALL)
+        
+    # Remove excessive whitespace
+    text = text.strip()
+    
+    return text
+
+def extract_plan_sections(text: str) -> Dict[str, str]:
+    """
+    Extracts structured sections from the plan text.
+    
+    Args:
+        text: The cleaned text
+        
+    Returns:
+        Dictionary with extracted sections
+    """
+    sections = {}
+    
+    # Try to extract plan title
+    title_match = re.search(r'(FY\d+[^\n]+Plan)', text)
+    if title_match:
+        sections["title"] = title_match.group(1).strip()
+    
+    # Try to extract dates
+    dates_match = re.search(r'Plan effective ([^,]+)(?:,| through) ([^\.]+)', text)
+    if dates_match:
+        sections["effective_date_start"] = dates_match.group(1).strip()
+        sections["effective_date_end"] = dates_match.group(2).strip()
+    
+    # Extract main sections using Roman numerals as markers
+    section_matches = re.finditer(r'([IVX]+)\.\s+([^\n]+)(?:\n+)(.*?)(?=(?:[IVX]+)\.\s+|$)', text, re.DOTALL)
+    for match in section_matches:
+        section_num = match.group(1)
+        section_title = match.group(2).strip()
+        section_content = match.group(3).strip()
+        
+        section_key = f"section_{section_num}"
+        sections[section_key] = {
+            "title": section_title,
+            "content": section_content
+        }
+    
+    # Extract compensation components (try to find tables, bonus structures)
+    # This is a simplistic approach - might need to be adjusted for different document formats
+    comp_components = re.findall(
+        r'([A-Z][^\.]+(?:Bonus|Commission|Draw|Incentive)[^\n]*?)(?:\n+)(.*?)(?=\n+[A-Z]|\Z)', 
+        text, re.DOTALL
+    )
+    
+    if comp_components:
+        sections["compensation_components"] = {}
+        for comp_title, comp_content in comp_components:
+            clean_title = re.sub(r'[^a-zA-Z0-9]+', '_', comp_title.strip()).lower()
+            sections["compensation_components"][clean_title] = {
+                "title": comp_title.strip(),
+                "content": comp_content.strip()
+            }
+    
+    return sections
+
+def extract_numeric_values(text: str) -> Dict[str, List[str]]:
+    """
+    Extracts potential monetary values and percentages from the text.
+    
+    Args:
+        text: The input text to analyze
+        
+    Returns:
+        Dictionary with extracted values
+    """
+    values = {
+        "monetary": [],
+        "percentages": []
+    }
+    
+    # Find monetary values (e.g., $1,000, $45.50)
+    monetary_matches = re.findall(r'\$\s*[\d,]+(?:\.\d+)?', text)
+    values["monetary"] = [m.strip() for m in monetary_matches]
+    
+    # Find percentages
+    percentage_matches = re.findall(r'\d+(?:\.\d+)?\s*%', text)
+    values["percentages"] = [p.strip() for p in percentage_matches]
+    
+    return values
+
+def clean_json(input_json_path: Union[str, Path], output_dir: Union[str, Path] = None) -> Path:
+    """
+    Loads raw JSON, cleans text, and saves cleaned JSON.
+    
+    Args:
+        input_json_path: Path to the input JSON file.
+        output_dir: Directory to save cleaned JSON. If not provided, defaults to 
+                    config.PLAN_OUTPUT_DIR appended with "cleaned_json".
+        
+    Returns:
+        Path to the cleaned JSON file.
+        
+    Raises:
+        FileNotFoundError: If the input JSON file doesn't exist.
+    """
+    input_json_path = Path(input_json_path)
+    
+    # Use the cleaned output directory from config if not provided
+    if output_dir is None:
+        output_dir = Path(config.PLAN_OUTPUT_DIR) / "cleaned_json"
+    else:
+        output_dir = Path(output_dir)
+    
+    # Validate input file
+    if not input_json_path.exists():
+        logger.error(f"❌ Input JSON not found: {input_json_path}")
+        raise FileNotFoundError(f"Input JSON not found: {input_json_path}")
+    
+    # Load JSON
+    try:
+        with open(input_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        logger.error(f"❌ Invalid JSON format: {input_json_path}")
+        raise ValueError(f"Invalid JSON format: {input_json_path}")
+    
+    # Get original content length for comparison
+    original_length = len(data.get("content", ""))
+    if original_length == 0:
+        logger.warning(f"⚠ Empty content in input JSON: {input_json_path}")
+    
+    # Clean and normalize text
+    raw_text = data.get("content", "")
+    cleaned_text = remove_patterns(raw_text)
+    cleaned_text = normalize_text(cleaned_text)
+    
+    # Update content with cleaned text
+    data["content"] = cleaned_text
+    
+    # Add metadata about cleaning
+    data["processing"] = {
+        "original_length": original_length,
+        "cleaned_length": len(cleaned_text),
+        "reduction_percentage": round(((original_length - len(cleaned_text)) / original_length) * 100, 2) if original_length else 0
+    }
+    
+    # Try to extract structured data
+    try:
+        sections = extract_plan_sections(cleaned_text)
+        if sections:
+            data["extracted_sections"] = sections
+            logger.info(f"✅ Extracted {len(sections)} sections/components from the document")
+    except Exception as e:
+        logger.warning(f"⚠ Failed to extract sections: {str(e)}")
+    
+    # Try to extract numeric values
+    try:
+        values = extract_numeric_values(cleaned_text)
+        if values["monetary"] or values["percentages"]:
+            data["extracted_values"] = values
+            logger.info(f"✅ Extracted {len(values['monetary'])} monetary values and {len(values['percentages'])} percentages")
+    except Exception as e:
+        logger.warning(f"⚠ Failed to extract numeric values: {str(e)}")
+    
+    # Ensure output directory exists
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.error(f"❌ Failed to create output directory {output_dir}: {str(e)}")
+        raise
+    
+    # Create output path
+    output_json_path = output_dir / input_json_path.name
+    
+    # Write cleaned JSON
+    try:
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        
+        logger.info(f"✅ Cleaned JSON saved: {output_json_path} (Reduced by {data['processing']['reduction_percentage']}%)")
+        return output_json_path
+    
+    except Exception as e:
+        logger.error(f"❌ Failed to save cleaned JSON: {str(e)}")
+        raise
+
+def clean_multiple_jsons(input_json_paths: List[Union[str, Path]], 
+                         output_dir: Union[str, Path] = None) -> List[Path]:
+    """
+    Cleans multiple JSON files in batch.
+    
+    Args:
+        input_json_paths: List of paths to input JSON files.
+        output_dir: Directory to save cleaned JSON files. If not provided, defaults to 
+                    config.PLAN_OUTPUT_DIR appended with "cleaned_json".
+        
+    Returns:
+        List of paths to cleaned JSON files.
+    """
+    # Use the cleaned output directory from config if not provided
+    if output_dir is None:
+        output_dir = Path(config.PLAN_OUTPUT_DIR) / "cleaned_json"
+    else:
+        output_dir = Path(output_dir)
+    
+    cleaned_paths = []
+    
+    for input_path in input_json_paths:
+        try:
+            cleaned_path = clean_json(input_path, output_dir)
+            cleaned_paths.append(cleaned_path)
+        except Exception as e:
+            logger.error(f"❌ Failed to clean {input_path}: {str(e)}")
+            continue
+    
+    logger.info(f"✅ Cleaned {len(cleaned_paths)} of {len(input_json_paths)} JSON files")
+    return cleaned_paths

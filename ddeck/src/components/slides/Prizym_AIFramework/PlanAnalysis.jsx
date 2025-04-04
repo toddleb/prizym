@@ -1,0 +1,278 @@
+import React from 'react';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Label } from 'recharts';
+
+const SPMPlanAnalysis = () => {
+  // Sample data for visualizations
+  const performanceData = [
+    { name: 'North America', beforeOptimization: 78, afterOptimization: 94 },
+    { name: 'Europe', beforeOptimization: 72, afterOptimization: 88 },
+    { name: 'Asia Pacific', beforeOptimization: 65, afterOptimization: 85 },
+    { name: 'Latin America', beforeOptimization: 60, afterOptimization: 83 },
+    { name: 'Middle East', beforeOptimization: 58, afterOptimization: 79 }
+  ];
+  
+  const planTypeData = [
+    { name: 'Commission Only', value: 28 },
+    { name: 'Base + Commission', value: 42 },
+    { name: 'Bonus-Driven', value: 18 },
+    { name: 'Hybrid Models', value: 12 }
+  ];
+  
+  const issuesIdentified = [
+    { category: 'Plan Complexity', count: 78 },
+    { category: 'Misaligned Incentives', count: 65 },
+    { category: 'Regional Disparity', count: 45 },
+    { category: 'Payment Timing', count: 35 },
+    { category: 'Quota Setting', count: 62 }
+  ];
+  
+  const keyInsights = [
+    {
+      title: "Plan Complexity",
+      description: "72% of plans had excessive complexity reducing sales focus",
+      recommendation: "Simplified structure with max 3-4 key performance indicators"
+    },
+    {
+      title: "Incentive Alignment",
+      description: "65% of plans incentivized volume over profitability",
+      recommendation: "Rebalanced metrics with 40% weight on margin contribution"
+    },
+    {
+      title: "Regional Consistency",
+      description: "31% variance in comparable role compensation across regions",
+      recommendation: "Standardized framework with regional adjustments based on market data"
+    },
+    {
+      title: "Payment Frequency",
+      description: "Quarterly payments led to 23% higher performance vs. annual",
+      recommendation: "Implemented monthly/quarterly cadence with real-time tracking"
+    }
+  ];
+  
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
+  return (
+    <div className="w-full h-full bg-white p-4 font-sans">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Case Study: Global Compensation Plan Analysis</h1>
+        <div className="flex items-center">
+          <div className="h-8 w-8 bg-purple-600 rounded-full mr-2"></div>
+          <div className="h-8 w-8 bg-blue-600 rounded-full"></div>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        {/* Client Challenge & Approach */}
+        <div className="border-2 border-gray-300 rounded-lg p-3">
+          <h2 className="text-lg font-bold mb-2">Client Challenge</h2>
+          <div className="text-sm space-y-1 mb-3">
+            <p>Global technology company with 3,000+ sales professionals across 45 countries</p>
+            <p>Inconsistent sales performance and high turnover rates across regions</p>
+            <p>Complex compensation structures with 200+ different plan variations</p>
+            <p>Difficulty attracting top sales talent in competitive markets</p>
+          </div>
+          
+          <h2 className="text-lg font-bold mb-2">Our Approach</h2>
+          <div className="flex items-start mb-1">
+            <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold mr-2 flex-shrink-0">1</div>
+            <p className="text-sm">AI-powered analysis of 200+ compensation plans across regions</p>
+          </div>
+          <div className="flex items-start mb-1">
+            <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold mr-2 flex-shrink-0">2</div>
+            <p className="text-sm">Knowledge graph creation connecting plan elements to performance</p>
+          </div>
+          <div className="flex items-start mb-1">
+            <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold mr-2 flex-shrink-0">3</div>
+            <p className="text-sm">Benchmarking against industry standards and top performers</p>
+          </div>
+          <div className="flex items-start">
+            <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold mr-2 flex-shrink-0">4</div>
+            <p className="text-sm">Custom optimization model for each region and role type</p>
+          </div>
+        </div>
+        
+        {/* Plan Analysis Visualizations */}
+        <div className="border-2 border-gray-300 rounded-lg p-3">
+          <h2 className="text-lg font-bold mb-2">Compensation Plan Analysis</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Plan Types Pie Chart */}
+            <div className="h-48">
+              <p className="text-sm font-bold mb-1 text-center">Plan Type Distribution</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={planTypeData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={60}
+                    fill="#8884d8"
+                    paddingAngle={2}
+                    dataKey="value"
+                    label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {planTypeData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            
+            {/* Issues Identified Bar Chart */}
+            <div className="h-48">
+              <p className="text-sm font-bold mb-1 text-center">Top Issues Identified</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={issuesIdentified}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 60, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="category" type="category" width={100} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#8884d8">
+                    {issuesIdentified.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          
+          {/* Knowledge Graph Visualization */}
+          <div className="mt-3">
+            <p className="text-sm font-bold mb-1 text-center">AI Knowledge Graph Insights (Simplified View)</p>
+            <div className="border border-gray-300 rounded-lg p-2 flex items-center justify-center">
+              <div className="relative h-20 w-full">
+                {/* This is a simplified representation of a knowledge graph */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-blue-100 border border-blue-500 flex items-center justify-center text-xs text-center">
+                  Sales Performance
+                </div>
+                
+                <div className="absolute top-1/4 left-1/4 w-12 h-12 rounded-full bg-green-100 border border-green-500 flex items-center justify-center text-xs text-center">
+                  Incentive Structure
+                </div>
+                <div className="absolute top-1/4 left-2/3 w-12 h-12 rounded-full bg-purple-100 border border-purple-500 flex items-center justify-center text-xs text-center">
+                  Payment Frequency
+                </div>
+                <div className="absolute top-3/4 left-1/4 w-12 h-12 rounded-full bg-yellow-100 border border-yellow-500 flex items-center justify-center text-xs text-center">
+                  Quota Setting
+                </div>
+                <div className="absolute top-3/4 left-2/3 w-12 h-12 rounded-full bg-red-100 border border-red-500 flex items-center justify-center text-xs text-center">
+                  Territory Design
+                </div>
+                
+                {/* Connection lines */}
+                <div className="absolute top-1/3 left-1/3 w-1/3 h-1/6 border-t border-l border-gray-400"></div>
+                <div className="absolute top-1/3 right-1/3 w-1/6 h-1/6 border-t border-r border-gray-400"></div>
+                <div className="absolute bottom-1/3 left-1/3 w-1/6 h-1/6 border-b border-l border-gray-400"></div>
+                <div className="absolute bottom-1/3 right-1/3 w-1/3 h-1/6 border-b border-r border-gray-400"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Results */}
+        <div className="border-2 border-gray-300 rounded-lg p-3">
+          <h2 className="text-lg font-bold mb-2">Results & Impact</h2>
+          
+          <div className="h-48 mb-2">
+            <p className="text-sm font-bold mb-1 text-center">Performance Improvement by Region</p>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={performanceData}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }}>
+                  <Label value="Performance Score" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 10 }} />
+                </YAxis>
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="beforeOptimization" name="Before" fill="#8884d8" />
+                <Bar dataKey="afterOptimization" name="After" fill="#82ca9d" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="bg-blue-50 rounded-lg p-2 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 border-2 border-blue-500 flex items-center justify-center text-blue-800 font-bold text-xl mr-2">
+                22%
+              </div>
+              <div className="text-sm">
+                <p className="font-bold">Performance Increase</p>
+                <p className="text-xs">Across all regions</p>
+              </div>
+            </div>
+            
+            <div className="bg-green-50 rounded-lg p-2 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-green-100 border-2 border-green-500 flex items-center justify-center text-green-800 font-bold text-xl mr-2">
+                18%
+              </div>
+              <div className="text-sm">
+                <p className="font-bold">Turnover Reduction</p>
+                <p className="text-xs">In high-performer segment</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-purple-50 rounded-lg p-2 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-purple-100 border-2 border-purple-500 flex items-center justify-center text-purple-800 font-bold text-xl mr-2">
+                31%
+              </div>
+              <div className="text-sm">
+                <p className="font-bold">Plan Simplification</p>
+                <p className="text-xs">Reduction in plan variations</p>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 rounded-lg p-2 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-yellow-100 border-2 border-yellow-500 flex items-center justify-center text-yellow-800 font-bold text-xl mr-2">
+                $11M
+              </div>
+              <div className="text-sm">
+                <p className="font-bold">Annual Savings</p>
+                <p className="text-xs">Through administration efficiency</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Key Insights & Next Steps */}
+        <div className="border-2 border-gray-300 rounded-lg p-3">
+          <h2 className="text-lg font-bold mb-2">Key Insights & Recommendations</h2>
+          
+          <div className="space-y-2 mb-3">
+            {keyInsights.map((insight, index) => (
+              <div key={index} className="border-l-4 border-blue-500 pl-2">
+                <p className="font-bold text-sm">{insight.title}</p>
+                <p className="text-xs">{insight.description}</p>
+                <p className="text-xs italic">Recommendation: {insight.recommendation}</p>
+              </div>
+            ))}
+          </div>
+          
+          <h2 className="text-lg font-bold mb-2">Next Phase Implementation</h2>
+          <div className="bg-gray-100 rounded-lg p-2">
+            <ul className="text-sm list-disc pl-4 space-y-1">
+              <li>Real-time performance tracking dashboard for sales managers</li>
+              <li>Personalized coaching recommendations based on AI analysis</li>
+              <li>Predictive modeling for quota attainment by territory</li>
+              <li>Dynamic adjustment of incentives based on market conditions</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SPMPlanAnalysis;

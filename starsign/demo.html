@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard Level 3: Action Mode</title>
+  <style>
+    /* [Truncated for readability — includes all layout and styling code] */
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <h2>Program: Northern Arizona University</h2>
+  </div>
+
+  <div class="filter-bar">
+    <select>
+      <option>All Programs</option>
+      <option>Computer Science</option>
+    </select>
+    <select>
+      <option>Status</option>
+      <option>High Intent</option>
+    </select>
+    <input type="text" placeholder="Search candidates..." />
+    <button class="btn-clear">Clear</button>
+    <button class="btn-apply">Apply Filters</button>
+  </div>
+
+  <div class="dashboard-wrapper">
+    <div class="sidebar-left">
+      <h2>Navigation</h2>
+      <ul>
+        <li>Northern Arizona University
+          <ul>
+            <li>Steve Sanghi College of Engineering
+              <ul>
+                <li>School of Informatics, Computing & Cyber Systems
+                  <ul>
+                    <li>Computer Science (B.S.)</li>
+                    <li>Software Engineering (B.S.)</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>College of Environment, Forestry, & Natural Sciences
+              <ul>
+                <li>Dept. of Applied Physics and Materials Science
+                  <ul>
+                    <li>Physics (B.S.)</li>
+                    <li>Physics and Astrophysics (B.S.)</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+      <a href="#settings" class="settings-link">⚙️ Settings</a>
+    </div>
+
+    <div class="main">
+      <div class="metrics">
+        <div class="metric-card"><div class="metric-icon">📊</div><div class="metric-label">Applications</div><div class="metric-value">1,240</div></div>
+        <div class="metric-card"><div class="metric-icon">📈</div><div class="metric-label">Match Rate</div><div class="metric-value">87%</div></div>
+        <div class="metric-card"><div class="metric-icon">📎</div><div class="metric-label">Inquiries</div><div class="metric-value">312</div></div>
+        <div class="metric-card"><div class="metric-icon">🕑</div><div class="metric-label">Avg Response</div><div class="metric-value">2.1d</div></div>
+        <div class="metric-card"><div class="metric-icon">⭐</div><div class="metric-label">Rating</div><div class="metric-value">4.7</div></div>
+        <div class="metric-card"><div class="metric-icon">📚</div><div class="metric-label">Programs</div><div class="metric-value">34</div></div>
+        <div class="metric-card"><div class="metric-icon">🧠</div><div class="metric-label">AI Score</div><div class="metric-value">92%</div></div>
+      </div>
+
+      <div class="charts row-3">
+        <div class="chart-box"><div class="chart-title">Program Engagement</div><div class="chart-placeholder"></div></div>
+        <div class="chart-box"><div class="chart-title">Applicant Sources</div><div class="chart-placeholder"></div></div>
+        <div class="chart-box"><div class="chart-title">Conversion Funnel</div><div class="chart-placeholder"></div></div>
+      </div>
+      <div class="charts row-2">
+        <div class="chart-box"><div class="chart-title">Skill Alignment Radar</div><div class="chart-placeholder"></div></div>
+        <div class="chart-box"><div class="chart-title">Interest Heatmap</div><div class="chart-placeholder"></div></div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Candidate</th><th>Program</th><th>Skills</th><th>Match</th><th>Intent</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>John Doe</td><td>Computer Science</td><td>Python, SQL</td><td>85%</td><td>High</td><td><button class="btn-action">View</button></td>
+            </tr>
+            <tr>
+              <td>Jane Smith</td><td>Data Science</td><td>R, Tableau</td><td>78%</td><td>Medium</td><td><button class="btn-action">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="sidebar-right">
+      <h2>Cosmic Signature</h2>
+      <p><strong>92% CLARITY</strong></p>
+      <p>Your cosmic signature defines how we match students to your program</p>
+
+      <h3>Program Star Signature</h3>
+      <div class="subhead">Technical Skills – 95%</div>
+      <div class="metric-right"><span>PYTHON</span><span>90%</span></div>
+      <div class="metric-right"><span>DATA SCIENCE</span><span>95%</span></div>
+      <div class="metric-right"><span>STATISTICS</span><span>85%</span></div>
+
+      <div class="subhead">Learning Style – 88%</div>
+      <div class="metric-right"><span>PROJECT-BASED</span><span>92%</span></div>
+      <div class="metric-right"><span>SELF-DIRECTED</span><span>88%</span></div>
+      <div class="metric-right"><span>HANDS-ON</span><span>85%</span></div>
+
+      <div class="subhead">Soft Skills – 90%</div>
+      <div class="metric-right"><span>PROBLEM SOLVING</span><span>95%</span></div>
+      <div class="metric-right"><span>COMMUNICATION</span><span>85%</span></div>
+      <div class="metric-right"><span>TEAMWORK</span><span>90%</span></div>
+
+      <h3>Upcoming Actions</h3>
+      <div class="metric-right">
+        <div><strong>Follow up</strong><br><small>7 candidates<br>Due in 2 days</small></div>
+        <span class="badge high">HIGH</span>
+      </div>
+      <div class="metric-right">
+        <div><strong>Virtual Info Session</strong><br><small>15 RSVPs<br>In 5 days</small></div>
+        <span class="badge medium">MEDIUM</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

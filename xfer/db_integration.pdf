@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""
+Database integration module for the compensation plan processor.
+Handles connections and transactions with PostgreSQL using config settings.
+"""
+
+import logging
+import json
+from typing import List, Dict, Any, Optional, Tuple
+import psycopg2
+from psycopg2.extras import execute_values
+from config.config import config
+
+logger = logging.getLogger("db_integration")
+
+
+def get_db_connection():
+    """Return a new database connection using config parameters."""
+    try:
+        return psycopg2.connect(
+            dbname=config.DB_NAME,
+            user=config.DB_USER,
+            password=config.DB_PASSWORD,
+            host=config.DB_HOST,
+            port=config.DB_PORT
+        )
+    except Exception as e:
+        logger.error(f"❌ Error connecting to PostgreSQL database: {e}")
+        raise
+
+
+class DBManager:
+    """
+    Database manager for compensation plan data storage.
+    Handles connections, transactions, and bulk imports.
+    """
+
+    def __init__(
+        self,
+        dbname: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[str] = None
+    ):
+        self.dbname = dbname or config.DB_NAME
+        self.user = user or config.DB_USER
+        self.password = password or config.DB_PASSWORD
+        self.host = host or config.DB_HOST
+        self.port = port or config.DB_PORT
+
+        # Import statistics
+        self.plans_imported = 0
+        self.components_imported = 0
+        self.tags_imported = 0
+
+    def get_connection(self):
+        """Create and return a new PostgreSQL connection."""
+        try:
+            return psycopg2.connect(
+                dbname=self.dbname,
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port
+            )
+        except Exception as e:
+            logger.error(f"❌ Error connecting to PostgreSQL database: {e}")
+            raise
+
+    @staticmethod
+    def _format_effective_dates(dates: Dict[str, str]) -> str:
+        """Format effective dates as a single string."""
+        start_date = dates.get('start_date', '')
+        end_date = dates.get('end_date', '')
+        if start_date and end_date:
+            return f"{start_date} through {end_date}"
+        return start_date
+
+    def save_processed_plan(self, plan_data: Dict[str, Any]) -> bool:
+        """
+        Save a single processed plan to the database.
+        Returns True on success, False on failure.
+        """
+        extraction = plan_data.get("extraction_result", {})
+        if "error" in extraction:
+            logger.warning(f"⚠ Skipping plan with extraction error: {plan_data.get('source_file', 'unknown')}")
+            return False
+
+        effective_dates = self._format_effective_dates(extraction.get('effective_dates', {}))
+
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # Insert plan header
+                    cursor.execute(
+                        """
+                        INSERT INTO comp_plans
+                        (title, effective_dates, total_target, source_file, summary)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            extraction.get('plan_title', plan_data.get('title', '')),
+                            effective_dates,
+                            extraction.get('total_target', ''),
+                            plan_data.get('source_file', ''),
+                            extraction.get('plan_summary', '')
+                        )
+                    )
+                    result = cursor.fetchone()
+                    if result is None:
+                        logger.error("❌ Failed to insert plan: No ID returned")
+                        conn.rollback()
+                        return False
+
+                    plan_id = result[0]
+                    self.plans_imported += 1
+
+                    # Insert special provisions, if any
+                    provisions = extraction.get('special_provisions', [])
+                    if isinstance(provisions, list) and provisions:
+                        provisions_data = [(plan_id, str(p)) for p in provisions]
+                        try:
+                            execute_values(
+                                cursor,
+                                "INSERT INTO comp_provisions (plan_id, provision) VALUES %s",
+                                provisions_data
+                            )
+                        except Exception as e:
+                            logger.warning(f"⚠ Error inserting provisions: {e}")
+
+                    # Process components (try two keys for compatibility)
+                    components = extraction.get('compensation_components', []) or extraction.get('components', [])
+                    for component in components:
+                        try:
+                            if isinstance(component, str):
+                                cursor.execute(
+                                    """
+                                    INSERT INTO comp_components (plan_id, name)
+                                    VALUES (%s, %s)
+                                    RETURNING id
+                                    """,
+                                    (plan_id, component)
+                                )
+                                cursor.fetchone()
+                                self.components_imported += 1
+                                continue
+
+                            # Normalize metrics and structure
+                            metrics = component.get('metrics', [])
+                            if isinstance(metrics, str):
+                                metrics = [metrics]
+                            structure = component.get('structure', '') or {}
+
+                            cursor.execute(
+                                """
+                                INSERT INTO comp_components
+                                (plan_id, name, type, weight, target_amount, frequency, metrics, structure, special_features)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                RETURNING id
+                                """,
+                                (
+                                    plan_id,
+                                    component.get('name', ''),
+                                    component.get('type', ''),
+                                    component.get('weight', ''),
+                                    component.get('target_amount', ''),
+                                    component.get('frequency', ''),
+                                    json.dumps(metrics),
+                                    json.dumps(structure),
+                                    json.dumps([])  # Empty special features
+                                )
+                            )
+                            comp_id = cursor.fetchone()[0]
+                            self.components_imported += 1
+
+                            # Insert component tags if available
+                            tags = component.get('tags', [])
+                            if isinstance(tags, list) and tags:
+                                tag_data = [(comp_id, tag) for tag in tags]
+                                execute_values(
+                                    cursor,
+                                    "INSERT INTO comp_tags (component_id, tag) VALUES %s",
+                                    tag_data
+                                )
+                                self.tags_imported += len(tag_data)
+
+                        except Exception as e:
+                            logger.warning(f"⚠ Error inserting component: {e}")
+
+                    # Update processing status
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO processing_status (file_path, status)
+                            VALUES (%s, %s)
+                            ON CONFLICT (file_path) DO UPDATE
+                            SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
+                            """,
+                            (plan_data.get('source_file', ''), 'completed')
+                        )
+                    except Exception as e:
+                        logger.warning(f"⚠ Error updating processing status: {e}")
+
+                    conn.commit()
+
+            logger.info(f"✅ Saved plan to database: {plan_data.get('title', 'Unknown')}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error saving plan to database: {e}")
+            return False
+
+    def save_batch_plans(self, processed_files: List[str]) -> Dict[str, Any]:
+        """
+        Save multiple processed plans to the database.
+        Returns a dictionary with import statistics.
+        """
+        # Reset stats
+        self.plans_imported = 0
+        self.components_imported = 0
+        self.tags_imported = 0
+
+        success_count = 0
+        fail_count = 0
+
+        for file_path in processed_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    plan_data = json.load(f)
+                if self.save_processed_plan(plan_data):
+                    success_count += 1
+                else:
+                    fail_count += 1
+            except Exception as e:
+                logger.error(f"❌ Error processing file {file_path}: {e}")
+                fail_count += 1
+
+        logger.info(f"✅ Database import complete: {success_count} successful, {fail_count} failed")
+        logger.info(
+            f"📊 Import stats: {self.plans_imported} plans, {self.components_imported} components, {self.tags_imported} tags"
+        )
+
+        return {
+            "success_count": success_count,
+            "fail_count": fail_count,
+            "plans_imported": self.plans_imported,
+            "components_imported": self.components_imported,
+            "tags_imported": self.tags_imported
+        }
+        

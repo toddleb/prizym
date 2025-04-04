@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""
+Process Compensation Plans Pipeline
+Runs the full pipeline: Load PDFs, Clean Text, Extract Compensation Data with AI, and Store as JSON.
+Optional database storage for processed plans.
+"""
+import os
+import sys
+import json
+import logging
+import asyncio
+import argparse
+from pathlib import Path
+from datetime import datetime
+from typing import List, Optional, Dict, Any, Union
+
+# __file__ is /Users/toddlebaron/prizym/spmedge/src/pipeline/process_plans.py
+SCRIPT_DIR = Path(__file__).resolve().parent            # /Users/toddlebaron/prizym/spmedge/src/pipeline
+PROJECT_ROOT = SCRIPT_DIR.parent.parent                  # /Users/toddlebaron/prizym/spmedge
+SRC_DIR = PROJECT_ROOT / "src"                           # /Users/toddlebaron/prizym/spmedge/src
+
+# Add the project root and src directory to sys.path so that modules can be imported correctly.
+sys.path.insert(0, str(PROJECT_ROOT))  # Allows importing modules from the project root (e.g., config)
+sys.path.insert(0, str(SRC_DIR))       # Allows importing modules from src/
+# Now import pipeline modules
+
+from pipeline.input_manager import get_input_path, get_output_path, validate_processing_options
+from pipeline.loader import load_all_documents
+from pipeline.cleaner import clean_json, clean_multiple_jsons
+from pipeline.comp_plan_processor import CompPlanProcessor
+from pipeline.db_integration import DBManager
+
+# Configure logging
+LOG_DIR = "data/logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, f"process_plans_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("process_plans")
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Process compensation plans from PDF to structured JSON")
+    
+    parser.add_argument("--input", "-i", 
+                      help="Input directory containing PDF/text files (default: data/new_plans)")
+    
+    parser.add_argument("--output", "-o", 
+                      help="Output directory for processed files (default: data/processed_plans)")
+    
+    parser.add_argument("--model", "-m", 
+                      help="OpenAI model to use (default: from config)")
+    
+    parser.add_argument("--workers", "-w", type=int,
+                      help="Number of parallel workers (default: from config)")
+    
+    parser.add_argument("--no-db", action="store_true",
+                      help="Skip database storage")
+    
+    parser.add_argument("--async", action="store_true", dest="use_async",
+                      help="Use async processing for better performance")
+    
+    parser.add_argument("--clean-only", action="store_true",
+                      help="Only run the cleaning step, skip AI processing")
+    
+    parser.add_argument("--report", action="store_true",
+                      help="Generate a summary report")
+    
+    parser.add_argument("--db-only", action="store_true",
+                      help="Only import existing processed files to database, skip processing")
+    
+    return parser.parse_args()
+
+async def process_async(input_dir: Path, output_dir: Path, options: Dict[str, Any]) -> List[Path]:
+    """Run the pipeline using async processing."""
+    logger.info("🔄 Running pipeline in async mode...")
+    
+    # Step 1: Load all documents
+    raw_json_dir = output_dir / "raw_json"
+    raw_json_files = load_all_documents(input_dir)
+    if not raw_json_files:
+        logger.error("❌ No documents found to process.")
+        return []
+    
+    # Step 2: Clean JSON Files in parallel
+    cleaned_json_dir = output_dir / "cleaned_json"
+    cleaned_json_files = clean_multiple_jsons(raw_json_files, cleaned_json_dir)
+    if not cleaned_json_files:
+        logger.error("❌ No valid cleaned JSON files. Stopping pipeline.")
+        return []
+    
+    # Stop here if clean-only mode is active
+    if options.get("clean_only"):
+        logger.info("✅ Clean-only mode: Processing complete after cleaning stage")
+        return cleaned_json_files
+    
+    # Step 3: Process Cleaned JSON with AI in parallel
+    processed_json_dir = output_dir / "processed_json"
+    processor = CompPlanProcessor(openai_model=options["model"])
+    
+    processed_json_files = await processor.process_directory(
+        cleaned_json_dir, 
+        processed_json_dir,
+        workers=options["workers"]
+    )
+    
+    # Step 4: Save to database if enabled
+    if not options.get("no_db") and processed_json_files:
+        logger.info("🔄 Saving processed plans to database...")
+        db_manager = DBManager()
+        
+        # Save processed files to database
+        import_stats = db_manager.save_batch_plans(processed_json_files)
+        logger.info(f"✅ Database import complete: {import_stats['success_count']} plans imported")
+    
+    # Generate report if requested
+    if options.get("report") and processed_json_files:
+        report = processor.generate_summary_report(processed_json_files)
+        report_path = output_dir / "summary_report.json"
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        logger.info(f"📊 Summary report generated: {report_path}")
+    
+    return processed_json_files
+
+def process_sync(input_dir: Path, output_dir: Path, options: Dict[str, Any]) -> List[Path]:
+    """Run the pipeline using synchronous processing."""
+    logger.info("🔄 Running pipeline in synchronous mode...")
+    
+    # Step 1: Load PDFs and Extract Text to JSON
+    raw_json_dir = output_dir / "raw_json"
+    raw_json_files = load_all_documents(input_dir)
+    if not raw_json_files:
+        logger.error("❌ No documents found to process.")
+        return []
+    
+    # Step 2: Clean JSON Files
+    cleaned_json_dir = output_dir / "cleaned_json"
+    cleaned_json_files = []
+    for json_file in raw_json_files:
+        cleaned_json = clean_json(json_file, cleaned_json_dir)
+        if cleaned_json:
+            cleaned_json_files.append(cleaned_json)
+    
+    if not cleaned_json_files:
+        logger.error("❌ No valid cleaned JSON files. Stopping pipeline.")
+        return []
+    
+    # Stop here if clean-only mode is active
+    if options.get("clean_only"):
+        logger.info("✅ Clean-only mode: Processing complete after cleaning stage")
+        return cleaned_json_files
+    
+    # Step 3: Process Cleaned JSON with AI
+    processed_json_dir = output_dir / "processed_json"
+    processor = CompPlanProcessor(openai_model=options["model"])
+    
+    processed_json_files = []
+    for json_file in cleaned_json_files:
+        processed_json = processor.process_cleaned_json(json_file, processed_json_dir)
+        if processed_json:
+            processed_json_files.append(processed_json)
+    
+    # Step 4: Save to database if enabled
+    if not options.get("no_db") and processed_json_files:
+        logger.info("🔄 Saving processed plans to database...")
+        db_manager = DBManager()
+        
+        # Save processed files to database
+        import_stats = db_manager.save_batch_plans(processed_json_files)
+        logger.info(f"✅ Database import complete: {import_stats['success_count']} plans imported")
+    
+    # Generate report if requested
+    if options.get("report") and processed_json_files:
+        report = processor.generate_summary_report(processed_json_files)
+        report_path = output_dir / "summary_report.json"
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        logger.info(f"📊 Summary report generated: {report_path}")
+    
+    return processed_json_files
+
+def db_only_import(output_dir: Path) -> None:
+    """Import existing processed files to database without reprocessing."""
+    logger.info("🔄 Running database-only import mode...")
+    
+    processed_json_dir = output_dir / "processed_json"
+    if not processed_json_dir.exists():
+        logger.error(f"❌ Processed JSON directory not found: {processed_json_dir}")
+        return
+    
+    processed_files = list(processed_json_dir.glob("*.json"))
+    if not processed_files:
+        logger.error("❌ No processed JSON files found.")
+        return
+    
+    logger.info(f"📂 Found {len(processed_files)} processed JSON files to import")
+    
+    # Import to database
+    db_manager = DBManager()
+    import_stats = db_manager.save_batch_plans(processed_files)
+    
+    logger.info(f"✅ Database import complete: {import_stats['success_count']} plans imported")
+    logger.info(f"📊 Import stats: {import_stats['plans_imported']} plans, "
+               f"{import_stats['components_imported']} components")
+
+async def main_async():
+    """Async main function to run the compensation plan processing pipeline."""
+    args = parse_arguments()
+    
+    # Get validated paths and options
+    input_dir = Path(get_input_path(args.input or "data/new_plans"))
+    output_dir = Path(get_output_path(args.output or "data/processed_plans"))
+    options = validate_processing_options(args.model, args.workers, args.no_db)
+    
+    # Add additional options
+    options["clean_only"] = args.clean_only
+    options["report"] = args.report
+    
+    # Record start time for performance monitoring
+    start_time = datetime.now()
+    logger.info(f"🚀 Starting Compensation Plan Processing Pipeline at {start_time}")
+    logger.info(f"📂 Input directory: {input_dir}")
+    logger.info(f"📂 Output directory: {output_dir}")
+    
+    # Create output directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Handle database-only mode
+        if args.db_only:
+            db_only_import(output_dir)
+            return
+        
+        # Process based on mode
+        if args.use_async:
+            processed_files = await process_async(input_dir, output_dir, options)
+        else:
+            processed_files = process_sync(input_dir, output_dir, options)
+        
+        # Save final results
+        if processed_files and not options.get("clean_only"):
+            final_output_file = output_dir / "final_results.json"
+            
+            # Convert paths to strings for JSON serialization
+            processed_paths = [str(path) for path in processed_files]
+            
+            with open(final_output_file, "w", encoding="utf-8") as f:
+                json.dump(processed_paths, f, indent=2)
+            
+            logger.info(f"✅ Processing complete. Final results saved: {final_output_file}")
+        
+    except Exception as e:
+        logger.error(f"❌ Pipeline failed with error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+    
+    # Log performance stats
+    end_time = datetime.now()
+    duration = end_time - start_time
+    logger.info(f"⏱️ Total processing time: {duration}")
+    logger.info(f"🏁 Pipeline completed at {end_time}")
+
+def main():
+    """Main entry point that sets up and runs the async event loop."""
+    asyncio.run(main_async())
+
+if __name__ == "__main__":
+    main()

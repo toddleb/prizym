@@ -1,0 +1,16 @@
+# Node
+node_modules/
+.next/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# OS
+.DS_Store
+
+# Dumps and zips
+*.zip
+xfer/db_dumps/

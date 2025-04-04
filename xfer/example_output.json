@@ -1,0 +1,78 @@
+{
+  "title": "FY25 Superficial District Manager",
+  "source_file": "FY25 Superficial District Manager.pdf",
+  "original_char_count": 33896,
+  "extraction_result": {
+    "plan_title": "FY25 Medtronic U.S. Cardiovascular (CV) Sales Incentive Plan",
+    "effective_dates": {
+      "start_date": "April 27, 2024",
+      "end_date": "April 25, 2025"
+    },
+    "plan_summary": "The FY25 Medtronic U.S. Cardiovascular (CV) Sales Incentive Plan provides the opportunity for participants to earn commissions and incentive compensation for selling identified products and/or achieving sales revenue goals in an assigned geography. The plan focuses on critical strategic imperatives and offers opportunities to earn through various bonuses and a recoverable draw.",
+    "compensation_components": [
+      {
+        "name": "Superficial Total District Revenue Bonus",
+        "type": "Bonus",
+        "target_amount": "55% of total compensation",
+        "frequency": "Quarterly",
+        "structure": "Earn a bonus for performance against a quarterly revenue quota for Total Superficial. Start earning at 75% attainment with additional earnings for each percent over quota.",
+        "metrics": [
+          "ClosureFast",
+          "RFS",
+          "VenaSeal",
+          "Capital",
+          "endoVenous other Revenue Streams"
+        ]
+      },
+      {
+        "name": "Quarterly ASP Bonus",
+        "type": "Bonus",
+        "target_amount": "20% of total compensation",
+        "frequency": "Quarterly",
+        "structure": "Earn a bonus for performance against a quarterly ASP Target for your District. Performance defines a payout tier correlating to a fixed payout.",
+        "metrics": [
+          "ClosureFast Catheters",
+          "VenaSeal Catheters"
+        ]
+      },
+      {
+        "name": "Superficial Quarterly VenaSeal Bonus",
+        "type": "Bonus",
+        "target_amount": "15% of total compensation",
+        "frequency": "Quarterly",
+        "structure": "Earn a bonus for performance against a quarterly revenue quota for Total VenaSeal Revenue. Start earning at 85% attainment with a cap at 100%.",
+        "metrics": [
+          "VenaSeal Revenue"
+        ]
+      },
+      {
+        "name": "Superficial District Capital Compliance Bonus",
+        "type": "Bonus",
+        "target_amount": "5% of total compensation",
+        "frequency": "Quarterly",
+        "structure": "Earn a bonus based on meeting compliance expectations for CAP customers. Performance against compliance targets defines a payout tier.",
+        "metrics": [
+          "Compliance with CAP customers"
+        ]
+      },
+      {
+        "name": "Expense Management Bonus",
+        "type": "Bonus",
+        "target_amount": "5% of total compensation",
+        "frequency": "Quarterly",
+        "structure": "Earn a bonus for keeping expenses within budget. Lower spend to expense quota attainments result in higher bonus payouts.",
+        "metrics": [
+          "Expense Management"
+        ]
+      }
+    ],
+    "payout_schedule": "Monthly payouts with quarterly earnings. Recoverable Draw of $10,000 for the first two months of each quarter, with true-up at quarter-end. Payouts generally occur within 45 days after the fiscal period close.",
+    "special_provisions": [
+      "Recoverable Draw: Monthly good-faith payments with quarterly true-ups.",
+      "Year-End True Up: If annual quota is achieved and quarterly payouts are less than the target, the difference is paid at year-end.",
+      "Windfall Protection: Adjustments for one-time substantial orders to prevent windfall earnings.",
+      "Disruptive Disaster Plan: Adjustments for major disasters impacting business performance.",
+      "Plan may be amended or terminated at any time by the Operating Unit President and VP of Compensation."
+    ]
+  }
+}

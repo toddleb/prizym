@@ -1,0 +1,151 @@
+import os
+import logging
+from pathlib import Path  # Using pathlib for better path handling
+from typing import Optional, Dict, Union, Any  # Added type hints
+from config.config import config
+
+logger = logging.getLogger("input_manager")
+
+def get_input_path(cli_input: Optional[str] = None) -> Path:
+    """
+    Determines the correct input path based on CLI argument or environment variable.
+    
+    Args:
+        cli_input (str, optional): The input path provided via CLI.
+
+    Returns:
+        Path: Validated and normalized input path.
+        
+    Raises:
+        ValueError: If no input path is provided.
+        FileNotFoundError: If the input path doesn't exist.
+    """
+    # Validate config has required attributes
+    if not hasattr(config, 'PLAN_INPUT_DIR'):
+        logger.error("❌ Configuration error: PLAN_INPUT_DIR not defined in config.")
+        raise AttributeError("PLAN_INPUT_DIR missing in configuration")
+        
+    # Get input path from CLI or config
+    input_path_str = cli_input or config.PLAN_INPUT_DIR
+
+    if not input_path_str:
+        logger.error("❌ No input file or directory provided, and no default is set in config.")
+        raise ValueError("Input path is required.")
+
+    # Convert to Path object and normalize
+    input_path = Path(input_path_str).resolve()
+
+    if not input_path.exists():
+        logger.error(f"❌ Specified input path does not exist: {input_path}")
+        raise FileNotFoundError(f"Invalid input path: {input_path}")
+
+    # Check if it's a file or directory and log accordingly
+    if input_path.is_file():
+        logger.info(f"✅ Using input file: {input_path}")
+    elif input_path.is_dir():
+        logger.info(f"✅ Using input directory: {input_path}")
+    else:
+        logger.warning(f"⚠ Path exists but is neither a file nor directory: {input_path}")
+
+    return input_path
+
+
+def get_output_path(cli_output: Optional[str] = None) -> Path:
+    """
+    Determines the correct output directory based on CLI argument or environment variable.
+
+    Args:
+        cli_output (str, optional): The output path provided via CLI.
+
+    Returns:
+        Path: Validated and normalized output directory.
+        
+    Raises:
+        ValueError: If no output path is provided.
+        PermissionError: If the output directory cannot be created.
+    """
+    # Validate config has required attributes
+    if not hasattr(config, 'PLAN_OUTPUT_DIR'):
+        logger.error("❌ Configuration error: PLAN_OUTPUT_DIR not defined in config.")
+        raise AttributeError("PLAN_OUTPUT_DIR missing in configuration")
+        
+    # Get output path from CLI or config
+    output_path_str = cli_output or config.PLAN_OUTPUT_DIR
+
+    if not output_path_str:
+        logger.error("❌ No output directory provided, and no default is set in config.")
+        raise ValueError("Output path is required.")
+
+    # Convert to Path object and normalize
+    output_path = Path(output_path_str).resolve()
+
+    # Ensure the output directory exists
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"✅ Using output path: {output_path}")
+    except PermissionError:
+        logger.error(f"❌ Permission denied when creating output directory: {output_path.parent}")
+        raise PermissionError(f"Cannot create output directory: {output_path.parent}")
+    except Exception as e:
+        logger.error(f"❌ Error creating output directory: {str(e)}")
+        raise
+
+    return output_path
+
+
+def validate_processing_options(
+    cli_model: Optional[str] = None, 
+    cli_workers: Optional[int] = None, 
+    cli_no_db: bool = False
+) -> Dict[str, Any]:
+    """
+    Validates additional processing options.
+
+    Args:
+        cli_model (str, optional): OpenAI model to use.
+        cli_workers (int, optional): Number of worker processes.
+        cli_no_db (bool): Whether to skip database saving.
+
+    Returns:
+        Dict[str, Any]: Validated processing settings.
+        
+    Raises:
+        AttributeError: If required config attributes are missing.
+    """
+    # Validate config has required attributes
+    if not hasattr(config, 'OPENAI_MODEL'):
+        logger.error("❌ Configuration error: OPENAI_MODEL not defined in config.")
+        raise AttributeError("OPENAI_MODEL missing in configuration")
+        
+    if not hasattr(config, 'WORKERS'):
+        logger.error("❌ Configuration error: WORKERS not defined in config.")
+        raise AttributeError("WORKERS missing in configuration")
+    
+    # Use CLI values or defaults from config
+    model = cli_model or config.OPENAI_MODEL
+    workers = cli_workers or config.WORKERS
+
+    # Validate model name (basic check)
+    valid_model_prefixes = ['gpt-', 'text-', 'claude-']
+    if not any(model.startswith(prefix) for prefix in valid_model_prefixes):
+        logger.warning(f"⚠ Unusual model name: {model}. Please verify it's correct.")
+
+    # Validate workers count
+    if not isinstance(workers, int):
+        try:
+            workers = int(workers)
+        except (ValueError, TypeError):
+            logger.warning("⚠ Workers must be an integer. Defaulting to 1.")
+            workers = 1
+
+    if workers < 1:
+        logger.warning("⚠ Workers must be at least 1. Defaulting to 1.")
+        workers = 1
+
+    logger.info(f"✅ Processing Options - Model: {model}, Workers: {workers}, Skip DB: {cli_no_db}")
+    
+    return {
+        "model": model, 
+        "workers": workers, 
+        "no_db": cli_no_db
+    }

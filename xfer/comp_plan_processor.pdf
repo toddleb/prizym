@@ -1,0 +1,246 @@
+"""
+Comp Plan Processor with Rate Limit Handling
+Extracts structured data in a single API call to avoid rate limits.
+"""
+
+import os
+import json
+import logging
+import asyncio
+import time
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Union
+from tqdm.asyncio import tqdm_asyncio
+
+# Adjust this import if your package structure changes after moving the file.
+from pipeline.utils.openai_client import OpenAIProcessor
+
+logger = logging.getLogger("comp_plan_processor")
+
+# Define the schema for extraction
+COMP_PLAN_SCHEMA = {
+    "plan_title": "string",
+    "effective_dates": {
+        "start_date": "string",
+        "end_date": "string"
+    },
+    "plan_summary": "string",
+    "compensation_components": [
+        {
+            "name": "string",
+            "type": "string",  # Bonus, Commission, etc.
+            "target_amount": "string",
+            "frequency": "string",  # Monthly, Quarterly, etc.
+            "structure": "string",  # Details of calculation
+            "metrics": ["string"]  # Performance metrics
+        }
+    ],
+    "payout_schedule": "string",
+    "special_provisions": ["string"]
+}
+
+class CompPlanProcessor:
+    """Processes cleaned JSON compensation plan documents with rate limit handling."""
+
+    def __init__(self, openai_model="gpt-4o", db_manager=None):
+        self.openai_processor = OpenAIProcessor(model=openai_model)
+        self.db_manager = db_manager
+        self.processed_count = 0
+        self.failed_count = 0
+        self.start_time = None
+        logger.info(f"✅ Initialized OpenAI processor with model: {openai_model}")
+
+    def extract_plan_data(self, text_content: str) -> Dict[str, Any]:
+        """
+        Extract all plan data in a single API call to avoid rate limits.
+        
+        Args:
+            text_content: The cleaned text content from the document.
+            
+        Returns:
+            Dictionary with extracted plan data.
+        """
+        logger.info("🔄 Extracting all plan data in a single API call...")
+        
+        # Estimate token count for safety
+        estimated_tokens = len(text_content) // 4
+        if estimated_tokens > 12000:
+            logger.warning(f"⚠ Document is very large ({estimated_tokens} est. tokens), truncating...")
+            text_content = text_content[:48000]  # ~12K tokens
+        
+        prompt = f"""
+        You are an AI trained to analyze sales compensation plans.
+        Extract the following structured information from the provided document text:
+        
+        1. Plan title - The official title of the compensation plan
+        2. Effective dates - The start and end dates when the plan is active
+        3. Plan summary - A high-level summary of the overall plan structure
+        4. Compensation components - All compensation elements including:
+           - Name of each component
+           - Type (Bonus, Commission, etc.)
+           - Target amount or percentage
+           - Payment frequency
+           - Structure details
+           - Associated performance metrics
+        5. Payout schedule - Details on when and how payouts occur
+        6. Special provisions - Special rules, exceptions, or provisions like clawbacks
+        
+        Return the data in JSON format matching this schema:
+        {json.dumps(COMP_PLAN_SCHEMA, indent=2)}
+        
+        Document content:
+        {text_content}
+        """
+        
+        try:
+            # Make a single API call with the complete prompt
+            result = self.openai_processor.generate_json(
+                prompt=prompt,
+                schema=COMP_PLAN_SCHEMA,
+                temperature=0.1,
+                max_tokens=2500
+            )
+            
+            logger.info("✅ Successfully extracted all plan data in a single call")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ OpenAI extraction failed: {e}")
+            return {"error": str(e)}
+
+    def process_cleaned_json(self, json_file: Union[str, Path], 
+                               output_dir: Union[str, Path] = "data/processed_json") -> Optional[Path]:
+        """
+        Process a single cleaned JSON file and extract structured information.
+        
+        Args:
+            json_file: Path to the cleaned JSON file.
+            output_dir: Directory to save processed JSON.
+            
+        Returns:
+            Path to the processed JSON file or None if processing failed.
+        """
+        json_file = Path(json_file)
+        output_dir = Path(output_dir)
+        
+        logger.info(f"📄 Processing cleaned JSON file: {json_file}")
+
+        try:
+            # Read the cleaned JSON file
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            text_content = data.get("content", "")
+            
+            if not text_content.strip():
+                logger.warning(f"⚠ Empty content in {json_file}, skipping")
+                self.failed_count += 1
+                return None
+
+            # Extract all plan data in a single API call
+            extraction_result = self.extract_plan_data(text_content)
+            
+            # Combine with original metadata
+            structured_data = {
+                "title": data.get("title", "Unknown Plan"),
+                "source_file": data.get("source_file", ""),
+                "original_char_count": len(text_content),
+                "extraction_result": extraction_result
+            }
+
+            # Ensure the output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_json_path = output_dir / json_file.name
+            
+            # Save the processed result
+            with open(output_json_path, "w", encoding="utf-8") as f:
+                json.dump(structured_data, f, indent=2)
+
+            # Save to database if manager is available
+            if self.db_manager and "error" not in extraction_result:
+                try:
+                    self.db_manager.save_processed_plan(structured_data)
+                except Exception as e:
+                    logger.error(f"❌ Failed to save to database: {str(e)}")
+
+            logger.info(f"✅ Processed JSON saved: {output_json_path}")
+            self.processed_count += 1
+            return output_json_path
+
+        except Exception as e:
+            logger.error(f"❌ Error processing cleaned JSON {json_file}: {e}")
+            self.failed_count += 1
+            return None
+
+    async def process_document_async(self, document_path: Union[str, Path]) -> Optional[Path]:
+        """
+        Async wrapper for processing a single document.
+        
+        Args:
+            document_path: Path to the document to process.
+            
+        Returns:
+            Path to the processed file or None if processing failed.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.process_cleaned_json, document_path)
+
+    async def process_directory(self, 
+                                directory_path: Union[str, Path],
+                                output_dir: Union[str, Path] = "data/processed_json",
+                                workers: int = 3) -> List[Path]:
+        """
+        Process multiple cleaned JSON documents with controlled concurrency.
+        
+        Args:
+            directory_path: Directory containing cleaned JSON files.
+            output_dir: Directory to save processed output.
+            workers: Number of concurrent workers (keep low to avoid rate limits).
+            
+        Returns:
+            List of paths to successfully processed files.
+        """
+        directory_path = Path(directory_path)
+        output_dir = Path(output_dir)
+        
+        if not directory_path.exists():
+            logger.error(f"❌ Directory not found: {directory_path}")
+            raise FileNotFoundError(f"Directory not found: {directory_path}")
+            
+        json_files = list(directory_path.glob("*.json"))
+        
+        if not json_files:
+            logger.warning(f"⚠ No JSON files found in {directory_path}")
+            return []
+
+        logger.info(f"📂 Processing {len(json_files)} cleaned JSON files with {workers} workers...")
+        
+        # Initialize stats
+        self.processed_count = 0
+        self.failed_count = 0
+        self.start_time = time.time()
+        
+        # Use a semaphore to control concurrency and prevent rate limits
+        semaphore = asyncio.Semaphore(workers)
+        
+        async def process_with_semaphore(file_path):
+            async with semaphore:
+                # Small delay between files to avoid hitting rate limits
+                await asyncio.sleep(1)
+                return await self.process_document_async(file_path)
+        
+        # Process files with progress bar
+        tasks = [process_with_semaphore(json_file) for json_file in json_files]
+        results = await tqdm_asyncio.gather(*tasks, desc="Processing files")
+        
+        # Calculate stats
+        elapsed_time = time.time() - self.start_time
+        successful_results = [r for r in results if r is not None]
+        
+        logger.info(f"✅ Processing complete! Processed {self.processed_count} files in {elapsed_time:.2f} seconds")
+        logger.info(f"📊 Success rate: {len(successful_results)}/{len(json_files)} ({len(successful_results)/len(json_files)*100:.1f}%)")
+        
+        if self.failed_count > 0:
+            logger.warning(f"⚠ {self.failed_count} files failed processing")
+
+        return successful_results

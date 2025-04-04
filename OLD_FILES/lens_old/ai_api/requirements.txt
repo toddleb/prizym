@@ -1,0 +1,14 @@
+# AI & API Framework
+fastapi
+uvicorn
+openai
+
+# Data Processing
+numpy
+pandas
+
+# Database (if needed)
+sqlalchemy
+psycopg2
+
+

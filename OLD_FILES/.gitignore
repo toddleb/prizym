@@ -1,0 +1,68 @@
+# Virtual Environment
+venv/
+*.venv
+env/
+.env/
+.venv/
+
+# Ignore Python virtual environments
+venv/
+__pycache__/
+
+# Ignore Node.js dependencies
+node_modules/
+package-lock.json
+
+# Ignore environment variables and API keys
+.env
+config.json
+
+# Ignore logs & caches
+*.log
+*.cache
+
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Logging
+*.log
+logs/
+
+# Environment and Secrets
+.env
+*.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Mypy cache
+.mypy_cache/
+
+# Temporary files
+*.tmp
+*.bak

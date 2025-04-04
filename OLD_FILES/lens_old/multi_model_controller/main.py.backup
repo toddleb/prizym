@@ -1,0 +1,86 @@
+import os
+import openai
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import requests
+
+# Load environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+MIXTRAL_API_KEY = os.getenv("MIXTRAL_API_KEY")
+DEFAULT_MODEL = os.getenv("DEFAULT_AI_MODEL", "gpt-4-turbo")
+AVAILABLE_MODELS = os.getenv("AVAILABLE_MODELS", "gpt-4-turbo,claude-3,mixtral-8x7b").split(",")
+
+# Initialize FastAPI
+app = FastAPI()
+
+# Define API request schema
+class AIQueryRequest(BaseModel):
+    model: Optional[str] = None  # If None, MMC selects the best model
+    query_key: str
+    asks: List[str]
+    response_fields: List[str]
+    refine: Optional[bool] = False
+    fields_to_refine: Optional[List[str]] = []
+
+# ✅ AI Model Selection Logic
+def select_ai_model(model: Optional[str]) -> str:
+    return model if model in AVAILABLE_MODELS else DEFAULT_MODEL
+
+# ✅ AI Query Execution Logic
+def query_ai_model(model: str, query: str) -> str:
+    if model == "gpt-4-turbo":
+        return query_openai(query)
+    elif model == "claude-3":
+        return query_claude(query)
+    elif model == "mixtral-8x7b":
+        return query_mixtral(query)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown AI model: {model}")
+
+# ✅ Query OpenAI GPT-4 API
+def query_openai(query: str) -> str:
+    response = openai.ChatCompletion.create(
+        model="gpt-4-turbo",
+        messages=[{"role": "system", "content": "You are an AI assistant."},
+                  {"role": "user", "content": query}],
+        api_key=OPENAI_API_KEY
+    )
+    return response.choices[0].message.content
+
+# ✅ Query Claude API
+def query_claude(query: str) -> str:
+    headers = {"Authorization": f"Bearer {CLAUDE_API_KEY}"}
+    response = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json={"prompt": query})
+    return response.json().get("response", "No response")
+
+# ✅ Query Mixtral API
+def query_mixtral(query: str) -> str:
+    headers = {"Authorization": f"Bearer {MIXTRAL_API_KEY}"}
+    response = requests.post("https://api.mistral.ai/v1/chat", headers=headers, json={"query": query})
+    return response.json().get("response", "No response")
+
+# ✅ Main Query Endpoint (MMC Selects AI Model)
+@app.post("/query-ai")
+def query_ai(request: AIQueryRequest):
+    model = select_ai_model(request.model)
+    return {"model": model, "response": query_ai_model(model, request.asks[0])}
+
+# ✅ Direct Model Query Endpoints
+@app.post("/query-gpt4")
+def query_gpt4(request: AIQueryRequest):
+    return {"model": "gpt-4-turbo", "response": query_openai(request.asks[0])}
+
+@app.post("/query-claude")
+def query_claude_endpoint(request: AIQueryRequest):
+    return {"model": "claude-3", "response": query_claude(request.asks[0])}
+
+@app.post("/query-mixtral")
+def query_mixtral_endpoint(request: AIQueryRequest):
+    return {"model": "mixtral-8x7b", "response": query_mixtral(request.asks[0])}
+
+# ✅ Health Check Endpoint
+@app.get("/status")
+def status():
+    return {"status": "MMC is running", "available_models": AVAILABLE_MODELS}
