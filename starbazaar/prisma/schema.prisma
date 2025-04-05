@@ -7,9 +7,347 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model UserStarsynProfile {
-  user_id         String   @id
-  starsyn_profile Json
+model achievements {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String?   @db.Uuid
+  code          String?
+  description   String?
+  date_earned   DateTime? @db.Timestamptz(6)
+  bonus_credits Int?      @default(0)
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
 
-  @@map("user_starsyn_profile")
+model assessment_framework {
+  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                    String?                     @db.Uuid
+  date                       DateTime                    @db.Timestamptz(6)
+  version                    String?
+  completion_rate            Int?
+  reliability                String?
+  question_count             Int?
+  created_at                 DateTime?                   @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime?                   @default(now()) @db.Timestamptz(6)
+  primary_assessment_tier_id String?                     @db.Uuid
+  primary_assessment_tier    primary_assessment_tier?    @relation(fields: [primary_assessment_tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                      users?                      @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  secondary_assessment_tier  secondary_assessment_tier[]
+  star_signature_snapshots   star_signature_snapshots[]
+  tertiary_assessment_tier   tertiary_assessment_tier[]
+}
+
+model assessment_questions {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prompt          String
+  category        String?
+  tier            String?
+  type            String?
+  tags            String[]
+  weight          Float?            @default(1.0)
+  is_active       Boolean?          @default(true)
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  micro_responses micro_responses[]
+}
+
+model audit_log {
+  id             String    @id @db.Uuid
+  user_id        String?   @db.Uuid
+  action         String?
+  table_affected String?
+  record_id      String?   @db.Uuid
+  changed_at     DateTime? @default(now()) @db.Timestamptz(6)
+  change_details Json?
+}
+
+model gamification_state {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String?   @db.Uuid
+  cosmic_credits Int?      @default(0)
+  level          Int?      @default(1)
+  streak_days    Int?      @default(0)
+  last_activity  DateTime? @db.Timestamptz(6)
+  users          users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model micro_assessments {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String?           @db.Uuid
+  type            String?
+  questions_count Int?
+  completed_at    DateTime?         @db.Timestamptz(6)
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  users           users?            @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  micro_responses micro_responses[]
+}
+
+model micro_responses {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  micro_assessment_id  String?               @db.Uuid
+  question_id          String?               @db.Uuid
+  answer               Int?
+  category             String?
+  question_type        String?
+  micro_assessments    micro_assessments?    @relation(fields: [micro_assessment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assessment_questions assessment_questions? @relation(fields: [question_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model organizations {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  type                  String?
+  location              String?
+  programs              programs[]
+  user_org_affiliations user_org_affiliations[]
+}
+
+model pathway_tracking {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String?   @db.Uuid
+  current_step String?
+  next_step    String?
+  suggested_by String?
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  users        users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model primary_assessment_tier {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String?
+  description          String?
+  color                String?
+  strengths            String?
+  learning_style       String?
+  career_paths         String?
+  assessment_framework assessment_framework[]
+}
+
+model profile_attributes {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                     String?
+  score                    Int?
+  tier_id                  String?                   @db.Uuid
+  tertiary_assessment_tier tertiary_assessment_tier? @relation(fields: [tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_profile_attributes  user_profile_attributes[]
+}
+
+model programs {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  description     String?
+  organization_id String?        @db.Uuid
+  created_at      DateTime?      @default(now()) @db.Timestamptz(6)
+  organizations   organizations? @relation(fields: [organization_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model rewards {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String?
+  description String?
+  cost        Int?
+}
+
+model secondary_assessment_tier {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                      String?
+  description               String?
+  color                     String?
+  level                     Int?
+  framework_id              String?                     @db.Uuid
+  assessment_framework      assessment_framework?       @relation(fields: [framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_secondary_influences user_secondary_influences[]
+}
+
+model skill_recommendations {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String?   @db.Uuid
+  skill_name            String?
+  recommendation_reason String?
+  created_at            DateTime? @default(now()) @db.Timestamptz(6)
+  users                 users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model star_signature_snapshots {
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                 String?               @db.Uuid
+  assessment_framework_id String?               @db.Uuid
+  snapshot_data           Json?
+  created_at              DateTime?             @default(now()) @db.Timestamptz(6)
+  assessment_framework    assessment_framework? @relation(fields: [assessment_framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                   users?                @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model tertiary_assessment_tier {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String?
+  category             String?
+  color                String?
+  description          String?
+  score                Int?
+  confidence           Float?
+  framework_id         String?               @db.Uuid
+  profile_attributes   profile_attributes[]
+  assessment_framework assessment_framework? @relation(fields: [framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_activity_log {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String?   @db.Uuid
+  activity_type String?
+  details       Json?
+  occurred_at   DateTime? @default(now()) @db.Timestamptz(6)
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_org_affiliations {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String?        @db.Uuid
+  organization_id String?        @db.Uuid
+  role            String?
+  status          String?
+  organizations   organizations? @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users?         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_permissions {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String?    @db.Uuid
+  permission permission
+  users      users?     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_profile_attributes {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id              String?             @db.Uuid
+  profile_attribute_id String?             @db.Uuid
+  score                Int?
+  confidence           Float?
+  created_at           DateTime?           @default(now()) @db.Timestamptz(6)
+  profile_attributes   profile_attributes? @relation(fields: [profile_attribute_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users?              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_profiles {
+  user_id         String  @id @db.Uuid
+  birth_year      Int?
+  education_level String?
+  interests       Json?
+  career_goals    Json?
+  visibility      String? @default("private")
+  users           users   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_role_history {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String?   @db.Uuid
+  role       user_role
+  started_at DateTime  @db.Timestamp(6)
+  ended_at   DateTime? @db.Timestamp(6)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_secondary_influences {
+  id                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                   String?                    @db.Uuid
+  secondary_tier_id         String?                    @db.Uuid
+  level                     Int?
+  created_at                DateTime?                  @default(now()) @db.Timestamptz(6)
+  secondary_assessment_tier secondary_assessment_tier? @relation(fields: [secondary_tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                     users?                     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_segments {
+  id      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id String?      @db.Uuid
+  segment user_segment
+  users   users?       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_tags {
+  id      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id String? @db.Uuid
+  tag     String
+  users   users?  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_tags_map {
+  user_id String @db.Uuid
+  tag     String
+  users   users  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([user_id, tag])
+}
+
+model users {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                      String
+  email                     String?                     @unique
+  user_type                 String?                     @default("STUDENT")
+  created_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  starsyn_image_url         String?
+  achievements              achievements[]
+  assessment_framework      assessment_framework[]
+  gamification_state        gamification_state[]
+  micro_assessments         micro_assessments[]
+  pathway_tracking          pathway_tracking[]
+  skill_recommendations     skill_recommendations[]
+  star_signature_snapshots  star_signature_snapshots[]
+  user_activity_log         user_activity_log[]
+  user_org_affiliations     user_org_affiliations[]
+  user_permissions          user_permissions[]
+  user_profile_attributes   user_profile_attributes[]
+  user_profiles             user_profiles?
+  user_role_history         user_role_history[]
+  user_secondary_influences user_secondary_influences[]
+  user_segments             user_segments[]
+  user_tags                 user_tags[]
+  user_tags_map             user_tags_map[]
+}
+
+enum life_phase {
+  dreamer
+  explorer
+  builder
+  driver
+  sage
+  philosopher
+}
+
+enum permission {
+  view_profiles
+  edit_profiles
+  manage_assessments
+  send_invites
+  assign_programs
+  admin_access
+}
+
+enum user_permission_type {
+  admin
+  editor
+  viewer
+}
+
+enum user_role {
+  nextie
+  agency
+  program
+  military
+  admin
+  partner
+  guardian
+  alumni
+}
+
+enum user_segment {
+  high_school
+  out_of_school_youth
+  college_enrolled
+  military_service
+  reentry
+  adult_learner
+  refugee_or_migrant
+  underemployed
+  alumni_returning
+  international
 }
