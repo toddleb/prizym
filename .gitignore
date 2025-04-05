@@ -14,3 +14,4 @@ __pycache__/
 # Dumps and zips
 *.zip
 xfer/db_dumps/
+starbazaar/.vscode/sftp.json

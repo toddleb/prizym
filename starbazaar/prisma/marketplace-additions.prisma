@@ -1,0 +1,218 @@
+// File: prisma/marketplace-additions.prisma
+// Purpose: Additional models to be added to your schema.prisma file to support the candidate marketplace
+
+// Candidates in the marketplace
+model marketplace_candidates {
+  id                        String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                   String?                          @db.Uuid
+  blindId                   String                           @unique  // Anonymous identifier for non-revealed candidates
+  isRevealed                Boolean                          @default(false)
+  matchScore                Int
+  intent                    String                           // high, medium, low, very-high
+  lastActive                DateTime?                        @db.Timestamptz(6)
+  location                  String?
+  educationLevel            String?
+  confidence                Int?
+  description               String?                          @db.Text
+  createdAt                 DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                         @default(now()) @db.Timestamptz(6)
+  
+  // Relations
+  users                     users?                           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketplace_skills        marketplace_candidate_skills[]
+  marketplace_future_goals  marketplace_candidate_goals[]
+  marketplace_tags          marketplace_candidate_tags[]
+  marketplace_activities    marketplace_candidate_activities[]
+  marketplace_strengths     marketplace_candidate_strengths[]
+  marketplace_growth_areas  marketplace_candidate_growth_areas[]
+  marketplace_assessments   marketplace_skill_assessments[]
+  marketplace_interactions  marketplace_candidate_interactions[]
+}
+
+// Skills possessed by marketplace candidates
+model marketplace_skills {
+  id          String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String                         @unique
+  category    String?
+  candidates  marketplace_candidate_skills[]
+}
+
+// Many-to-many relation between candidates and skills
+model marketplace_candidate_skills {
+  candidate_id        String                    @db.Uuid
+  skill_id            String                    @db.Uuid
+  level               Int?                      // Optional proficiency level
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidate_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketplace_skills     marketplace_skills     @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@id([candidate_id, skill_id])
+}
+
+// Future goals/aspirations of candidates
+model marketplace_goals {
+  id          String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String                         @unique
+  candidates  marketplace_candidate_goals[]
+}
+
+// Many-to-many relation between candidates and goals
+model marketplace_candidate_goals {
+  candidate_id        String                    @db.Uuid
+  goal_id             String                    @db.Uuid
+  priority            Int?                      // Optional priority (1=highest)
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidate_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketplace_goals      marketplace_goals      @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@id([candidate_id, goal_id])
+}
+
+// Tags and interests for candidates
+model marketplace_tags {
+  id          String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String                         @unique
+  category    String?                        // Optional category for organizing tags
+  candidates  marketplace_candidate_tags[]
+}
+
+// Many-to-many relation between candidates and tags
+model marketplace_candidate_tags {
+  candidate_id        String                    @db.Uuid
+  tag_id              String                    @db.Uuid
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidate_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketplace_tags       marketplace_tags       @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@id([candidate_id, tag_id])
+}
+
+// Recent activity records for candidates
+model marketplace_candidate_activities {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type         String                // Education, Project, Interest, etc.
+  date         DateTime              @db.Timestamptz(6)
+  description  String
+  candidateId  String                @db.Uuid
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([candidateId])
+}
+
+// Strength areas for candidates
+model marketplace_candidate_strengths {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  description  String
+  candidateId  String                @db.Uuid
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([candidateId])
+}
+
+// Growth/improvement areas for candidates
+model marketplace_candidate_growth_areas {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  description  String
+  candidateId  String                @db.Uuid
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([candidateId])
+}
+
+// Skill assessment categories
+model marketplace_skill_assessments {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category     String
+  score        Int
+  candidateId  String                @db.Uuid
+  
+  marketplace_candidates   marketplace_candidates           @relation(fields: [candidateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  marketplace_sub_skills   marketplace_assessment_subskills[]
+  
+  @@index([candidateId])
+}
+
+// Individual skills within assessment categories
+model marketplace_assessment_subskills {
+  id                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  score               Int
+  assessmentId        String                      @db.Uuid
+  
+  marketplace_skill_assessments marketplace_skill_assessments @relation(fields: [assessmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([assessmentId])
+}
+
+// Track interactions between programs and candidates
+model marketplace_candidate_interactions {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId       String                @db.Uuid
+  programId         String                @db.Uuid
+  organizationId    String                @db.Uuid
+  interactionType   String                // viewed, contacted, bookmarked, etc.
+  status            String?               // pending, accepted, rejected, etc.
+  notes             String?               @db.Text
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @default(now()) @db.Timestamptz(6)
+  
+  marketplace_candidates marketplace_candidates @relation(fields: [candidateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  programs              programs               @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organizations         organizations          @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([candidateId])
+  @@index([programId])
+  @@index([organizationId])
+}
+
+// Add these relations to existing models
+model programs {
+  id                             String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                           String
+  description                    String?
+  organization_id                String?                           @db.Uuid
+  created_at                     DateTime?                         @default(now()) @db.Timestamptz(6)
+  organizations                  organizations?                    @relation(fields: [organization_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  marketplace_candidate_interactions marketplace_candidate_interactions[]
+}
+
+model organizations {
+  id                             String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                           String
+  type                           String?
+  location                       String?
+  programs                       programs[]
+  user_org_affiliations          user_org_affiliations[]
+  marketplace_candidate_interactions marketplace_candidate_interactions[]
+}
+
+model users {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                      String
+  email                     String?                     @unique
+  user_type                 String?                     @default("STUDENT")
+  created_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  starsyn_image_url         String?
+  achievements              achievements[]
+  assessment_framework      assessment_framework[]
+  gamification_state        gamification_state[]
+  micro_assessments         micro_assessments[]
+  pathway_tracking          pathway_tracking[]
+  skill_recommendations     skill_recommendations[]
+  star_signature_snapshots  star_signature_snapshots[]
+  user_activity_log         user_activity_log[]
+  user_org_affiliations     user_org_affiliations[]
+  user_permissions          user_permissions[]
+  user_profile_attributes   user_profile_attributes[]
+  user_profiles             user_profiles?
+  user_role_history         user_role_history[]
+  user_secondary_influences user_secondary_influences[]
+  user_segments             user_segments[]
+  user_tags                 user_tags[]
+  user_tags_map             user_tags_map[]
+  marketplace_candidates    marketplace_candidates[]
+}

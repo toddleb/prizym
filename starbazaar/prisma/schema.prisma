@@ -3,13 +3,488 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-model UserStarsynProfile {
-  user_id         String   @id
-  starsyn_profile Json
+model achievements {
+  id            String    @id @default(uuid())
+  user_id       String?   
+  code          String?
+  description   String?
+  date_earned   DateTime? 
+  bonus_credits Int?      @default(0)
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
 
-  @@map("user_starsyn_profile")
+model assessment_framework {
+  id                         String                      @id @default(uuid())
+  user_id                    String?                     
+  date                       DateTime                    
+  version                    String?
+  completion_rate            Int?
+  reliability                String?
+  question_count             Int?
+  created_at                 DateTime?                   @default(now())
+  updated_at                 DateTime?                   @default(now())
+  primary_assessment_tier_id String?                     
+  primary_assessment_tier    primary_assessment_tier?    @relation(fields: [primary_assessment_tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                      users?                      @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  secondary_assessment_tier  secondary_assessment_tier[]
+  star_signature_snapshots   star_signature_snapshots[]
+  tertiary_assessment_tier   tertiary_assessment_tier[]
+}
+
+model assessment_questions {
+  id              String            @id @default(uuid())
+  prompt          String
+  category        String?
+  tier            String?
+  type            String?
+  tags            String            // Changed from String[] to String - store as comma-separated values
+  weight          Float?            @default(1.0)
+  is_active       Boolean?          @default(true)
+  created_at      DateTime?         @default(now())
+  updated_at      DateTime?         @default(now())
+  micro_responses micro_responses[]
+}
+
+model audit_log {
+  id             String    @id
+  user_id        String?   
+  action         String?
+  table_affected String?
+  record_id      String?   
+  changed_at     DateTime? @default(now())
+  change_details Json?
+}
+
+model gamification_state {
+  id             String    @id @default(uuid())
+  user_id        String?   
+  cosmic_credits Int?      @default(0)
+  level          Int?      @default(1)
+  streak_days    Int?      @default(0)
+  last_activity  DateTime? 
+  users          users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model micro_assessments {
+  id              String            @id @default(uuid())
+  user_id         String?           
+  type            String?
+  questions_count Int?
+  completed_at    DateTime?         
+  created_at      DateTime?         @default(now())
+  users           users?            @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  micro_responses micro_responses[]
+}
+
+model micro_responses {
+  id                   String                @id @default(uuid())
+  micro_assessment_id  String?               
+  question_id          String?               
+  answer               Int?
+  category             String?
+  question_type        String?
+  micro_assessments    micro_assessments?    @relation(fields: [micro_assessment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assessment_questions assessment_questions? @relation(fields: [question_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model organizations {
+  id                    String                  @id @default(uuid())
+  name                  String
+  type                  String?
+  location              String?
+  programs              programs[]
+  user_org_affiliations user_org_affiliations[]
+}
+
+model pathway_tracking {
+  id           String    @id @default(uuid())
+  user_id      String?   
+  current_step String?
+  next_step    String?
+  suggested_by String?
+  updated_at   DateTime? @default(now())
+  users        users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model primary_assessment_tier {
+  id                   String                 @id @default(uuid())
+  name                 String?
+  description          String?
+  color                String?
+  strengths            String?
+  learning_style       String?
+  career_paths         String?
+  assessment_framework assessment_framework[]
+}
+
+model profile_attributes {
+  id                       String                    @id @default(uuid())
+  name                     String?
+  score                    Int?
+  tier_id                  String?                   
+  tertiary_assessment_tier tertiary_assessment_tier? @relation(fields: [tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_profile_attributes  user_profile_attributes[]
+}
+
+model programs {
+  id              String         @id @default(uuid())
+  name            String
+  description     String?
+  organization_id String?        
+  created_at      DateTime?      @default(now())
+  organizations   organizations? @relation(fields: [organization_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model rewards {
+  id          String  @id @default(uuid())
+  name        String?
+  description String?
+  cost        Int?
+}
+
+model secondary_assessment_tier {
+  id                        String                      @id @default(uuid())
+  name                      String?
+  description               String?
+  color                     String?
+  level                     Int?
+  framework_id              String?                     
+  assessment_framework      assessment_framework?       @relation(fields: [framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_secondary_influences user_secondary_influences[]
+}
+
+model skill_recommendations {
+  id                    String    @id @default(uuid())
+  user_id               String?   
+  skill_name            String?
+  recommendation_reason String?
+  created_at            DateTime? @default(now())
+  users                 users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model star_signature_snapshots {
+  id                      String                @id @default(uuid())
+  user_id                 String?               
+  assessment_framework_id String?               
+  snapshot_data           Json?
+  created_at              DateTime?             @default(now())
+  assessment_framework    assessment_framework? @relation(fields: [assessment_framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                   users?                @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model tertiary_assessment_tier {
+  id                   String                @id @default(uuid())
+  name                 String?
+  category             String?
+  color                String?
+  description          String?
+  score                Int?
+  confidence           Float?
+  framework_id         String?               
+  profile_attributes   profile_attributes[]
+  assessment_framework assessment_framework? @relation(fields: [framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_activity_log {
+  id            String    @id @default(uuid())
+  user_id       String?   
+  activity_type String?
+  details       Json?
+  occurred_at   DateTime? @default(now())
+  users         users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_org_affiliations {
+  id              String         @id @default(uuid())
+  user_id         String?        
+  organization_id String?        
+  role            String?
+  status          String?
+  organizations   organizations? @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users?         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_permissions {
+  id         String     @id @default(uuid())
+  user_id    String?    
+  permission permission
+  users      users?     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_profile_attributes {
+  id                   String              @id @default(uuid())
+  user_id              String?             
+  profile_attribute_id String?             
+  score                Int?
+  confidence           Float?
+  created_at           DateTime?           @default(now())
+  profile_attributes   profile_attributes? @relation(fields: [profile_attribute_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users?              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_profiles {
+  user_id         String  @id
+  birth_year      Int?
+  education_level String?
+  interests       Json?
+  career_goals    Json?
+  visibility      String? @default("private")
+  users           users   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_role_history {
+  id         String    @id @default(uuid())
+  user_id    String?   
+  role       user_role
+  started_at DateTime  @db.Timestamp(6)
+  ended_at   DateTime? @db.Timestamp(6)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_secondary_influences {
+  id                        String                     @id @default(uuid())
+  user_id                   String?                    
+  secondary_tier_id         String?                    
+  level                     Int?
+  created_at                DateTime?                  @default(now())
+  secondary_assessment_tier secondary_assessment_tier? @relation(fields: [secondary_tier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                     users?                     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model user_segments {
+  id      String       @id @default(uuid())
+  user_id String?      
+  segment user_segment
+  users   users?       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_tags {
+  id      String  @id @default(uuid())
+  user_id String? 
+  tag     String
+  users   users?  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_tags_map {
+  user_id String 
+  tag     String
+  users   users  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([user_id, tag])
+}
+
+model users {
+  id                        String                      @id @default(uuid())
+  name                      String
+  email                     String?                     @unique
+  user_type                 String?                     @default("STUDENT")
+  created_at                DateTime?                   @default(now())
+  updated_at                DateTime?                   @default(now())
+  starsyn_image_url         String?
+  achievements              achievements[]
+  assessment_framework      assessment_framework[]
+  gamification_state        gamification_state[]
+  micro_assessments         micro_assessments[]
+  pathway_tracking          pathway_tracking[]
+  skill_recommendations     skill_recommendations[]
+  star_signature_snapshots  star_signature_snapshots[]
+  user_activity_log         user_activity_log[]
+  user_org_affiliations     user_org_affiliations[]
+  user_permissions          user_permissions[]
+  user_profile_attributes   user_profile_attributes[]
+  user_profiles             user_profiles?
+  user_role_history         user_role_history[]
+  user_secondary_influences user_secondary_influences[]
+  user_segments             user_segments[]
+  user_tags                 user_tags[]
+  user_tags_map             user_tags_map[]
+}
+
+enum life_phase {
+  dreamer
+  explorer
+  builder
+  driver
+  sage
+  philosopher
+}
+
+enum permission {
+  view_profiles
+  edit_profiles
+  manage_assessments
+  send_invites
+  assign_programs
+  admin_access
+}
+
+enum user_permission_type {
+  admin
+  editor
+  viewer
+}
+
+enum user_role {
+  nextie
+  agency
+  program
+  military
+  admin
+  partner
+  guardian
+  alumni
+}
+
+enum user_segment {
+  high_school
+  out_of_school_youth
+  college_enrolled
+  military_service
+  reentry
+  adult_learner
+  refugee_or_migrant
+  underemployed
+  alumni_returning
+  international
+}
+
+// Keep the ignored models as they were
+model attributes {
+  id                Int     @id @default(autoincrement())
+  attributeCategory Int?
+  title             String? @db.VarChar(255)
+  category          String? @db.VarChar(14)
+  keywordsEn        String? @db.VarChar(255)
+  keywordsEs        String  @db.VarChar(255)
+  descriptionEn     String? @db.VarChar(255)
+  descriptionEs     String? @db.VarChar(255)
+  branch            String  @db.VarChar(255)
+  code              String  @db.VarChar(255)
+
+  @@map("attributes")
+  @@ignore
+}
+
+model classes {
+  id                 Int     @id @default(autoincrement())
+  catalogId          Int
+  STATE_ID           String? @db.VarChar(4)
+  SUBJECT            String? @db.VarChar(42)
+  COURSE_ID          Int?
+  TITLE              String? @db.VarChar(71)
+  DESCRIPTION        String? @db.VarChar(2742)
+  COMMENTS           String? @db.VarChar(556)
+  IB_FLAG            String? @db.VarChar(5)
+  AP_FLAG            String? @db.VarChar(5)
+  GS_MAPPING_FLAG    String? @db.VarChar(5)
+  HS_MAPPING_FLAG    String? @db.VarChar(4)
+  OTHER_MAPPING_FLAG String? @db.VarChar(5)
+  EFF_DATE           String? @db.VarChar(13)
+  EXP_DATE           String? @db.VarChar(10)
+  VERSION            Int?
+
+  @@map("classes")
+  @@ignore
+}
+
+model log_post {
+  id            Int    @id @default(autoincrement())
+  endpoint      String @db.VarChar(255)
+  json_sent     String
+  json_received String
+  app_version   String @db.VarChar(255)
+  ip            String @db.VarChar(255)
+  error         String
+  timestamp     String @db.VarChar(255)
+
+  @@map("log_post")
+  @@ignore
+}
+
+model next_users {
+  id                Int    @id @default(autoincrement())
+  city              String @db.VarChar(255)
+  state             String @db.VarChar(255)
+  lat               String @db.VarChar(255)
+  lon               String @db.VarChar(255)
+  interests         String
+  wants             String
+  extracurriculars  String
+  skills            String
+  careers           String
+  paths             String
+  interest_level    String @db.VarChar(255)
+  start_data        String @db.VarChar(255)
+  acceptance_chance Float
+  next_score        Float
+  spark_score       Float
+
+  @@map("next_users")
+  @@ignore
+}
+
+model schools {
+  id              Int     @id @default(autoincrement())
+  name            String  @db.VarChar(255)
+  district        String? @default("N/A") @db.VarChar(255)
+  type            String? @default("N/A") @db.VarChar(50)
+  grades          String? @default("N/A") @db.VarChar(50)
+  yearCount       Int?    @default(4)
+  periodCount     Int?    @default(2)
+  classCount      Int?    @default(6)
+  yearLabels      String? @default("default") @db.VarChar(50)
+  periodLabels    String? @default("default") @db.VarChar(50)
+  requiredClasses Json?
+  courseCatalogId Int
+  city            String? @default("N/A") @db.VarChar(255)
+  state           String? @default("N/A") @db.VarChar(50)
+  zip             String? @default("N/A") @db.VarChar(20)
+  website         String? @default("N/A") @db.VarChar(255)
+  phone           String? @default("N/A") @db.VarChar(20)
+  email           String? @default("N/A") @db.VarChar(255)
+
+  @@map("schools")
+  @@ignore
+}
+
+model scoring_output {
+  id                  String  @id @db.VarChar(16)
+  classId             Int     @default(0)
+  classTitle          String? @db.VarChar(255)
+  classDescription    String? @db.VarChar(5000)
+  attributeId         Int     @default(0)
+  attributeTitle      String? @db.VarChar(255)
+  attributeDefinition String?
+  attributeCategory   String? @db.VarChar(255)
+  attributeKeywords   String? @db.VarChar(255)
+  score               Int     @default(0)
+  rationaleEn         String
+  rationaleEs         String
+  mock                Int     @default(0)
+
+  @@map("scoring_output")
+  @@ignore
+}
+
+model scoring_output_backup {
+  uniqueId           String? @db.VarChar(16)
+  classId            Int?
+  class              String? @db.VarChar(71)
+  classDescription   String? @db.VarChar(2742)
+  interestId         Int     @default(0)
+  interest           String? @db.VarChar(47)
+  interestDefinition String? @db.VarChar(83)
+  interestCategory   String? @db.VarChar(14)
+  interestKeywords   String? @db.VarChar(45)
+  score              Int     @default(0)
+  rationaleEn        String  @default("") @db.VarChar(35)
+  rationaleEs        String  @default("") @db.VarChar(35)
+  mock               Int     @default(0)
+
+  @@map("scoring_output_backup")
+  @@ignore
 }
