@@ -1,0 +1,12 @@
+
+# Ignore Python cache and environment files
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.sqlite
+.env
+data/
+
+node_modules/
+node_modules/
